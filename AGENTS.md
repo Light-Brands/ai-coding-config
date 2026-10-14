@@ -25,7 +25,7 @@ et al.). Current version: `9.23.0` (see `.claude-plugin/marketplace.json`).
 ## Where things live (purpose-keyed map)
 
 ```
-.claude-plugin/marketplace.json     Marketplace manifest. version=9.16.0. ONE plugin: "ai-coding-config" → ./plugins/core
+.claude-plugin/marketplace.json     Marketplace manifest. version=9.23.0. ONE plugin: "ai-coding-config" → ./plugins/core
 .claude-plugin/CLAUDE.md            Marketplace dev notes — describes the THREE-PLACE version sync rule
 plugins/core/                       The actual plugin (canonical source for everything distributable)
   .claude-plugin/plugin.json        Plugin manifest. version MUST match marketplace.json (sync rule)
