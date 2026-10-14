@@ -2,8 +2,13 @@
 name: brainstorm-synthesis
 # prettier-ignore
 description: "Use when facing hard architectural decisions, multiple valid approaches exist, need diverse perspectives before committing, or want M-of-N synthesis on complex problems"
-version: 1.0.0
+version: 1.1.1
 category: planning
+model-hint: opus
+stability: experimental
+next-skill: ship
+requires:
+  - skill:brainstorming
 triggers:
   - "brainstorm synthesis"
   - "f-thread"

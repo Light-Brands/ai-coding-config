@@ -11,7 +11,7 @@ fork at `git@github.com:Light-Brands/ai-coding-config.git`. We pull upstream (`T
 periodically — see `f4dccbb Merge branch 'TechNickAI:main' into main`. There is **no
 runtime, no server, no build** — every artifact is markdown, YAML, or shell. End users
 install it via `/plugin marketplace add ...` (Claude Code) or `scripts/bootstrap.sh` (Cursor
-et al.). Current version: `9.16.0` (see `.claude-plugin/marketplace.json`).
+et al.). Current version: `9.23.0` (see `.claude-plugin/marketplace.json`).
 
 ## Stack
 

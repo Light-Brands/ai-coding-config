@@ -1,8 +1,8 @@
 ---
 # prettier-ignore
 description: "Set up or update AI coding configurations - interactive setup for Claude Code, Cursor, and other AI coding tools"
-argument-hint: "[update]"
-version: 4.1.1
+argument-hint: "[update|doctor]"
+version: 4.3.0
 ---
 
 # AI Coding Configuration
@@ -14,6 +14,15 @@ tools. The marketplace lives at `https://github.com/TechNickAI/ai-coding-config`
 
 - `/ai-coding-config` - Interactive setup for current project
 - `/ai-coding-config update` - Update plugins and configs to latest versions
+- `/ai-coding-config doctor` - Diagnose plugin health, hook state, and config drift
+
+## Mode Routing
+
+- No argument → setup mode
+- `update` → update mode
+- `doctor` → doctor mode
+- Unrecognized argument (typo, unknown subcommand) → setup mode; mention available
+  subcommands (`update`, `doctor`) at the start of output
 
 ## Interaction Guidelines
 
@@ -120,7 +129,8 @@ Before installing, detect what already exists:
 
 1. **Fresh project** (no existing configs)
    - Create `.cursor/rules/` and `.cursor/commands/` directories
-   - Create `AGENTS.md`, symlink `CLAUDE.md` → `AGENTS.md`
+   - Create `AGENTS.md` (Claude Code and Cursor both read it directly — no symlink
+     needed)
 
 2. **Existing rules, no AI coding config yet**
    - Has `.cursor/rules/` as real directory
@@ -521,6 +531,207 @@ If nothing changed (already up to date, no reset needed), skip the restart messa
 </restart-guidance>
 
 </update-mode>
+
+---
+
+<doctor-mode>
+
+<objective>
+Run a diagnostic battery and report as a ✅ / ⚠️ / ❌ checklist. Group by category.
+End with a suggested-fixes section. Read-only except for hook permission repair (safe,
+reversible, no content change). Print each category header as you complete that group of
+checks so the user sees progress — don't collect everything silently before reporting.
+</objective>
+
+<context-detection>
+Determine environment before running checks:
+
+- **Source repo**: `plugins/core/` directory exists at cwd. Run all checks including
+  symlink and plugin JSON consistency checks.
+- **User project**: `plugins/core/` absent. Skip source-repo checks; focus on plugin
+  install state, settings, and hooks.
+
+Report which context was detected at the top of output. </context-detection>
+
+<checks>
+
+### Plugin Install State
+
+These checks mirror the ones in `<marketplace-doctor>` (update-mode). If either section
+is updated (e.g., a new settings key), keep both in sync.
+
+Read `~/.claude/plugins/known_marketplaces.json` with the Read tool:
+
+- ✅ ai-coding-config marketplace entry present
+- ❌ File not found → marketplace never initialized; suggest
+  `/plugin marketplace add https://github.com/TechNickAI/ai-coding-config`
+- ❌ File exists but ai-coding-config entry missing → suggest
+  `/plugin marketplace add https://github.com/TechNickAI/ai-coding-config`
+
+Check `~/.claude/plugins/cache/ai-coding-config/` for plugin content using Glob:
+
+- ✅ Cache directory exists with agents, commands, and skills subdirectories
+- ❌ Cache missing or empty → suggest `/plugin install ai-coding-config`
+
+Read `~/.claude/settings.json` and check for plugin enablement:
+
+- ✅ ai-coding-config appears in plugins/enabled list
+- ⚠️ Not listed → plugin may be disabled; run `/plugin` to check status
+
+### Symlinks (source repo only)
+
+For each directory: `.claude/commands`, `.claude/agents`, `.claude/skills`:
+
+Use Bash with absolute paths anchored to `$(pwd)`:
+
+```bash
+ls -la "$(pwd)/.claude/commands" "$(pwd)/.claude/agents" "$(pwd)/.claude/skills"
+```
+
+- ✅ Each is a symlink pointing to the corresponding `plugins/core/` subdirectory
+- ❌ Missing, not a symlink, or wrong target → note the broken symlink
+
+Check `rules/` → `.cursor/rules/`:
+
+```bash
+ls -la "$(pwd)/rules"
+```
+
+- ✅ `rules` is a symlink to `.cursor/rules`
+- ❌ Missing or wrong → `ln -s .cursor/rules rules`
+
+### Hook Scripts
+
+**Source repo:** Read `plugins/core/hooks/hooks.json` with the Read tool to get declared
+hooks. Use Glob to list `plugins/core/hooks/*.sh`, then check each file:
+
+- ✅ File exists, executable (`-x`), and first line is `#!/bin/bash`
+- ⚠️ Exists but not executable → offer to auto-fix: `chmod +x <path>`
+- ❌ File missing → note as broken
+
+**User project:** Hook script files are managed by the plugin cache — skip the script
+file checks. Instead, verify hooks are registered in settings (see below).
+
+Check that hooks are registered in project or global settings. Read
+`.claude/settings.json` if it exists; otherwise fall back to `~/.claude/settings.json`:
+
+- ✅ Settings file parses as valid JSON and contains hook entries
+- ⚠️ Valid JSON but no hooks registered → hooks won't fire; suggest running
+  `/ai-coding-config update`
+- ❌ Invalid JSON → note the parse error
+- ℹ️ No local `.claude/settings.json` and global settings has no hooks → hooks rely on
+  plugin marketplace loading
+
+### Marketplace JSON Consistency (source repo only)
+
+Read both `.claude-plugin/marketplace.json` and
+`plugins/core/.claude-plugin/plugin.json`:
+
+- ✅ Both parse as valid JSON
+- ✅ `metadata.version` == `plugins[0].version` == `plugin.json version`
+- ⚠️ Version mismatch → "Bump all three per `.claude-plugin/AGENTS.md`"
+
+### Version Drift
+
+Compare installed command version vs source repo version. Read the `version` field from
+the YAML frontmatter of:
+
+1. This command file (currently executing)
+2. `~/.ai_coding_config/plugins/core/commands/ai-coding-config.md` (source, if it
+   exists)
+
+- ✅ Versions match
+- ⚠️ Source is newer → suggest `/ai-coding-config update`
+- ℹ️ Source repo not found at `~/.ai_coding_config` — normal for plugin-only users (no
+  action needed)
+
+### Skill Frontmatter
+
+Use Glob to list `plugins/core/skills/*/SKILL.md` (source repo only — the plugin cache
+uses flat `.md` files without subdirectories, so this check applies only in the source
+repo context).
+
+For each SKILL.md, read and verify:
+
+- ✅ File has `---` YAML frontmatter block
+- ✅ `name`, `description`, and `triggers` fields present
+- ⚠️ Missing `triggers` → skill won't auto-activate on natural language
+- If `next-skill` declared: check by directory name first (fast path — the directory
+  name should match the skill name); if not found, fall back to scanning `name` fields
+  in each SKILL.md. Also check `.claude/commands/` for commands. ✅ target found, ⚠️
+  target not found anywhere
+- If `stability: experimental` declared: ℹ️ note as informational (expected for new or
+  actively-changing skills — not a problem, just surfaced for awareness)
+
+Report a single summary line per skill (not per field) to keep output scannable.
+
+</checks>
+
+<auto-fix>
+Hook permissions are the only thing doctor auto-fixes (with user confirmation), and
+only in source-repo context where the script files are present:
+
+"⚠️ <hook-name>.sh is not executable. Fix now? [y/N]"
+
+If yes: `chmod +x plugins/core/hooks/<hook-name>.sh`
+
+For all other issues, report and direct to the appropriate fix command. Don't modify
+JSON files, settings, or symlinks without explicit user instruction. </auto-fix>
+
+<output-format>
+Print category headers as the checks complete. Example final output:
+
+```
+## ai-coding-config doctor
+
+Context: source repo (plugins/core/ detected)
+
+### Plugin Install State
+✅ Marketplace registered (ai-coding-config v9.21.0)
+✅ Plugin cache present
+✅ Plugin enabled in settings
+
+### Symlinks
+✅ .claude/commands → plugins/core/commands
+✅ .claude/agents → plugins/core/agents
+✅ .claude/skills → plugins/core/skills
+❌ rules/ symlink missing
+
+### Hook Scripts
+✅ verify-deliverables.sh — executable, valid shebang
+⚠️ todo-persist.sh — exists but not executable
+
+### Marketplace JSON Consistency
+✅ .claude-plugin/marketplace.json valid JSON
+✅ plugins/core/.claude-plugin/plugin.json valid JSON
+✅ Versions consistent (9.21.0)
+
+### Version Drift
+✅ Command file up to date (v4.2.0)
+
+### Skill Frontmatter
+✅ brainstorming — name, description, triggers, next-skill: brainstorm-synthesis (found)
+✅ systematic-debugging — name, description, triggers, next-skill: verify-fix (found)
+ℹ️ mcp-debug — triggers field present, stability: experimental
+
+---
+## Summary
+1 failure ❌  1 warning ⚠️  11 passed ✅
+
+## Suggested Fixes
+❌ rules/ symlink missing:
+   ln -s .cursor/rules rules
+
+⚠️ todo-persist.sh not executable:
+   chmod +x plugins/core/hooks/todo-persist.sh
+   (or confirm above to auto-fix)
+```
+
+All-green output ends with: "All checks passed — your setup is healthy."
+
+Keep the summary tight. Users should be able to skim it in 10 seconds. </output-format>
+
+</doctor-mode>
 
 ---
 
